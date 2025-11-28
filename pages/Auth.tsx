@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User, ArrowRight, AlertCircle, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle2, Chrome } from 'lucide-react';
 import Button from '../components/Button';
 import { 
   createUserWithEmailAndPassword, 
@@ -13,41 +13,69 @@ import { doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../services/firebase';
 
 const Auth: React.FC = () => {
-  const [view, setView] = useState<'login' | 'signup' | 'forgot'>('login');
+  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
-  
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
 
-  const resetState = (newView: 'login' | 'signup' | 'forgot') => {
+  const resetForm = () => {
     setError(null);
-    setSuccess(null);
+    setSuccessMsg(null);
     setFormData({ name: '', email: '', password: '' });
-    setView(newView);
   };
 
-  const handleGoogleLogin = async () => {
+  const toggleMode = () => {
+    setIsLogin(!isLogin);
+    resetForm();
+  };
+
+  const handleGoogleSignIn = async () => {
     setLoading(true);
     setError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       
-      // Check if user exists in Firestore, if not create them
+      // Check if user exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid));
+      
       if (!userDoc.exists()) {
+        // Create new user doc
         await setDoc(doc(db, "users", user.uid), {
           name: user.displayName || 'User',
           email: user.email,
           createdAt: serverTimestamp(),
-          settings: { lastMode: 'KNEADING', intensity: 50 }
+          settings: {
+             lastMode: 'KNEADING',
+             intensity: 50
+          }
         });
       }
     } catch (err: any) {
       console.error(err);
-      setError("Failed to sign in with Google.");
+      if (err.code === 'auth/popup-closed-by-user') {
+        // User closed popup, no error needed
+      } else {
+        setError(err.message || "Google sign in failed.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!formData.email) {
+      setError("Please enter your email address to reset your password.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, formData.email);
+      setSuccessMsg("Password reset email sent! Check your inbox.");
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to send reset email.");
     } finally {
       setLoading(false);
     }
@@ -57,32 +85,34 @@ const Auth: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    setSuccess(null);
+    setSuccessMsg(null);
 
     try {
-      if (view === 'forgot') {
-        await sendPasswordResetEmail(auth, formData.email);
-        setSuccess("Password reset email sent! Check your inbox.");
-        setLoading(false);
-        return;
-      }
-
-      if (view === 'login') {
+      if (isLogin) {
+        // Login Logic
         await signInWithEmailAndPassword(auth, formData.email, formData.password);
       } else {
         // Sign Up Logic
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
         const user = userCredential.user;
 
-        await updateProfile(user, { displayName: formData.name });
+        // Update Auth Profile
+        await updateProfile(user, {
+          displayName: formData.name
+        });
 
+        // Create User Doc in Firestore
         await setDoc(doc(db, "users", user.uid), {
           name: formData.name,
           email: formData.email,
           createdAt: serverTimestamp(),
-          settings: { lastMode: 'KNEADING', intensity: 50 }
+          settings: {
+             lastMode: 'KNEADING',
+             intensity: 50
+          }
         });
       }
+      // Redirect is handled by App.tsx detecting auth state change
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/invalid-credential') {
@@ -91,24 +121,26 @@ const Auth: React.FC = () => {
         setError("That email is already registered.");
       } else if (err.code === 'auth/weak-password') {
         setError("Password should be at least 6 characters.");
-      } else if (err.code === 'auth/user-not-found') {
-        setError("No account found with this email.");
       } else {
         setError(err.message || "An error occurred. Please try again.");
       }
     } finally {
-      if (view !== 'forgot') setLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen pt-20 pb-12 flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-slate-50 dark:bg-slate-900 transition-colors">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen pt-20 pb-12 flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-slate-50 relative overflow-hidden">
+      {/* Background Decor */}
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-brand-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob"></div>
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-200/40 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+
+      <div className="w-full max-w-md relative z-10">
         <motion.div 
           layout
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white dark:bg-slate-800 rounded-3xl shadow-xl shadow-slate-200/50 dark:shadow-none overflow-hidden border border-slate-100 dark:border-slate-700"
+          className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden border border-white/50"
         >
           <div className="p-8 sm:p-12">
             <motion.div 
@@ -116,15 +148,9 @@ const Auth: React.FC = () => {
               animate={{ opacity: 1, y: 0 }}
               className="text-center mb-8"
             >
-              <h2 className="text-3xl font-bold text-slate-900 dark:text-white">
-                {view === 'login' && 'Welcome Back'}
-                {view === 'signup' && 'Join PillowEase'}
-                {view === 'forgot' && 'Reset Password'}
-              </h2>
-              <p className="text-slate-500 dark:text-slate-400 mt-2">
-                {view === 'login' && 'Control your comfort from anywhere.'}
-                {view === 'signup' && 'Start your journey to better relaxation.'}
-                {view === 'forgot' && 'Enter your email to receive instructions.'}
+              <h2 className="text-3xl font-bold text-slate-900 tracking-tight">{isLogin ? 'Welcome Back' : 'Join PillowEase'}</h2>
+              <p className="text-slate-500 mt-2">
+                {isLogin ? 'Control your comfort from anywhere.' : 'Start your journey to better relaxation.'}
               </p>
             </motion.div>
 
@@ -134,42 +160,64 @@ const Auth: React.FC = () => {
                   initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                   animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm flex items-start gap-3"
+                  className="bg-red-50 text-red-600 p-4 rounded-xl text-sm flex items-start gap-3 border border-red-100"
                 >
                   <AlertCircle className="w-5 h-5 flex-shrink-0" />
                   <span>{error}</span>
                 </motion.div>
               )}
-              {success && (
+              {successMsg && (
                 <motion.div
                   initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                   animate={{ opacity: 1, height: 'auto', marginBottom: 20 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  className="bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 p-4 rounded-xl text-sm flex items-start gap-3"
+                  className="bg-green-50 text-green-600 p-4 rounded-xl text-sm flex items-start gap-3 border border-green-100"
                 >
-                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
-                  <span>{success}</span>
+                  <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+                  <span>{successMsg}</span>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Google Sign In */}
+            <div className="mb-6">
+              <button 
+                type="button"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-medium py-3 px-4 rounded-xl transition-all hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Chrome className="w-5 h-5 text-blue-500" />
+                <span>Sign in with Google</span>
+              </button>
+            </div>
+
+            <div className="relative mb-6">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-slate-400 font-medium uppercase text-xs tracking-wider">Or continue with</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
               <AnimatePresence mode="popLayout">
-                {view === 'signup' && (
+                {!isLogin && (
                   <motion.div
                     initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
                     animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
                     exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
                   >
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Full Name</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-brand-500 transition-colors">
                         <User size={18} />
                       </div>
                       <input
                         type="text"
-                        required={view === 'signup'}
-                        className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all outline-none dark:text-white"
+                        required={!isLogin}
+                        className="block w-full pl-10 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all outline-none"
                         placeholder="John Doe"
                         value={formData.name}
                         onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -180,15 +228,15 @@ const Auth: React.FC = () => {
               </AnimatePresence>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email Address</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-brand-500 transition-colors">
                     <Mail size={18} />
                   </div>
                   <input
                     type="email"
                     required
-                    className="block w-full pl-10 pr-3 py-3 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all outline-none dark:text-white"
+                    className="block w-full pl-10 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all outline-none"
                     placeholder="you@example.com"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
@@ -196,92 +244,54 @@ const Auth: React.FC = () => {
                 </div>
               </div>
 
-              {view !== 'forgot' && (
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-                    {view === 'login' && (
-                      <button 
-                        type="button"
-                        onClick={() => resetState('forgot')}
-                        className="text-xs font-semibold text-brand-600 hover:text-brand-500"
-                      >
-                        Forgot?
-                      </button>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <Lock size={18} />
-                    </div>
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      required
-                      className="block w-full pl-10 pr-10 py-3 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all outline-none dark:text-white"
-                      placeholder="••••••••"
-                      value={formData.password}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
-                    />
-                    <button
+              <div>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="block text-sm font-medium text-slate-700">Password</label>
+                  {isLogin && (
+                    <button 
                       type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                      onClick={handleForgotPassword}
+                      className="text-xs font-semibold text-brand-600 hover:text-brand-700 hover:underline"
                     >
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      Forgot password?
                     </button>
-                  </div>
+                  )}
                 </div>
-              )}
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 group-focus-within:text-brand-500 transition-colors">
+                    <Lock size={18} />
+                  </div>
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    className="block w-full pl-10 pr-3 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all outline-none"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  />
+                </div>
+              </div>
 
               <Button 
                 type="submit" 
-                className="w-full justify-center py-4 text-lg shadow-lg shadow-brand-500/20" 
+                className="w-full justify-center py-3.5 text-base shadow-lg shadow-brand-500/20 hover:shadow-brand-500/30" 
                 isLoading={loading}
-                icon={view === 'login' ? <ArrowRight size={18} /> : (view === 'forgot' ? <KeyRound size={18} /> : undefined)}
+                icon={isLogin ? <ArrowRight size={18} /> : undefined}
               >
-                {view === 'login' && 'Sign In'}
-                {view === 'signup' && 'Create Account'}
-                {view === 'forgot' && 'Send Reset Link'}
+                {isLogin ? 'Sign In' : 'Create Account'}
               </Button>
             </form>
 
-            {view !== 'forgot' && (
-              <>
-                <div className="relative my-8">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white dark:bg-slate-800 text-slate-500">Or continue with</span>
-                  </div>
-                </div>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full justify-center"
-                  onClick={handleGoogleLogin}
-                  disabled={loading}
-                >
-                  <svg className="h-5 w-5 mr-2" aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="M12.0003 20.45c4.6593 0 8.364-3.5537 8.364-8.0935 0-0.6385-0.0818-1.2587-0.2182-1.8548H12.0003V14.16h4.6366c-0.2728 1.9366-2.141 3.2384-4.6366 3.2384-2.8228 0-5.1274-2.1137-5.1274-4.9082s2.3045-4.9082 5.1274-4.9082c1.3228 0 2.5228 0.4773 3.4501 1.2546l2.3592-2.3592C16.3861 5.1673 14.332 4.16 12.0003 4.16 7.6457 4.16 4.0911 7.6073 4.0911 12.0003s3.5546 7.8403 7.9092 7.8403z" fill="currentColor" />
-                  </svg>
-                  Google
-                </Button>
-              </>
-            )}
-
             <div className="mt-8 text-center">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {view === 'login' && (
-                  <>Don't have an account? <button onClick={() => resetState('signup')} className="font-semibold text-brand-600 hover:text-brand-500 transition-colors">Sign up</button></>
-                )}
-                {view === 'signup' && (
-                  <>Already have an account? <button onClick={() => resetState('login')} className="font-semibold text-brand-600 hover:text-brand-500 transition-colors">Log in</button></>
-                )}
-                {view === 'forgot' && (
-                  <button onClick={() => resetState('login')} className="font-semibold text-brand-600 hover:text-brand-500 transition-colors">Back to Sign In</button>
-                )}
+              <p className="text-sm text-slate-500">
+                {isLogin ? "Don't have an account? " : "Already have an account? "}
+                <button
+                  onClick={toggleMode}
+                  className="font-bold text-brand-600 hover:text-brand-500 transition-colors"
+                >
+                  {isLogin ? 'Sign up' : 'Log in'}
+                </button>
               </p>
             </div>
           </div>
