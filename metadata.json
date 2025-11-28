@@ -1,0 +1,5 @@
+{
+  "name": "PillowEase",
+  "description": "Smart controller application for the PillowEase massager featuring AI-powered relaxation modes.",
+  "requestFramePermissions": []
+}
