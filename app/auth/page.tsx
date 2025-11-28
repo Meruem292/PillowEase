@@ -1,16 +1,29 @@
-import React, { useState } from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
-import Button from '../components/Button';
+import { Mail, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
+import Button from '../../components/Button';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../services/firebase';
+import { auth, db } from '../../services/firebase';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../../components/AuthProvider';
 
-const Auth: React.FC = () => {
+export default function AuthPage() {
+  const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, authLoading, router]);
 
   const resetForm = () => {
     setError(null);
@@ -34,15 +47,15 @@ const Auth: React.FC = () => {
       } else {
         // Sign Up Logic
         const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-        const user = userCredential.user;
+        const newUser = userCredential.user;
 
         // Update Auth Profile
-        await updateProfile(user, {
+        await updateProfile(newUser, {
           displayName: formData.name
         });
 
         // Create User Doc in Firestore
-        await setDoc(doc(db, "users", user.uid), {
+        await setDoc(doc(db, "users", newUser.uid), {
           name: formData.name,
           email: formData.email,
           createdAt: serverTimestamp(),
@@ -52,7 +65,7 @@ const Auth: React.FC = () => {
           }
         });
       }
-      // Redirect is handled by App.tsx detecting auth state change
+      // Effect hook will handle redirect
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/invalid-credential') {
@@ -68,6 +81,8 @@ const Auth: React.FC = () => {
       setLoading(false);
     }
   };
+
+  if (authLoading) return null; // Or a loader
 
   return (
     <div className="min-h-screen pt-20 pb-12 flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-slate-50">
@@ -190,6 +205,4 @@ const Auth: React.FC = () => {
       </div>
     </div>
   );
-};
-
-export default Auth;
+}
