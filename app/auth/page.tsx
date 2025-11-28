@@ -40,6 +40,12 @@ export default function AuthPage() {
     setLoading(true);
     setError(null);
 
+    if (!auth || !db) {
+      setError("Firebase is not configured properly. Please check your environment variables.");
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isLogin) {
         // Login Logic
@@ -74,6 +80,8 @@ export default function AuthPage() {
         setError("That email is already registered.");
       } else if (err.code === 'auth/weak-password') {
         setError("Password should be at least 6 characters.");
+      } else if (err.code === 'auth/invalid-api-key') {
+        setError("System Error: Invalid API Key.");
       } else {
         setError(err.message || "An error occurred. Please try again.");
       }

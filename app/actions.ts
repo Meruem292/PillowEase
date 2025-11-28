@@ -4,9 +4,21 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { AIRecommendation, MassageMode, HeatLevel } from "../types";
 
 // Initialize Server-Side
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const apiKey = process.env.API_KEY;
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export async function getSmartRecommendation(userFeeling: string): Promise<AIRecommendation> {
+  if (!ai) {
+    console.warn("Gemini API Key missing");
+    return {
+      mode: MassageMode.KNEADING,
+      intensity: 50,
+      heat: HeatLevel.LOW,
+      duration: 15,
+      reasoning: "AI services are currently offline. Using default relaxation settings."
+    };
+  }
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
