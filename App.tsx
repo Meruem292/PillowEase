@@ -15,6 +15,13 @@ const useAuth = () => {
   const [loading, setLoading] = useState(true);
   
   useEffect(() => {
+    // If auth is not initialized (e.g. missing keys), stop loading and let user see Landing
+    if (!auth) {
+      console.warn("Firebase Auth not initialized. Checking env vars.");
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser({ 
@@ -32,6 +39,7 @@ const useAuth = () => {
   }, []);
   
   const logout = async () => {
+    if (!auth) return;
     try {
       await signOut(auth);
     } catch (error) {

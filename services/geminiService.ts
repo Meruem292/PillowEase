@@ -1,11 +1,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AIRecommendation, MassageMode, HeatLevel } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const getSmartRecommendation = async (
   userFeeling: string
 ): Promise<AIRecommendation> => {
+  // Initialize inside the function to avoid crash on app startup if key is undefined
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.error("Gemini API Key is missing");
+    throw new Error("Gemini API Key is missing. Please check your environment variables.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
